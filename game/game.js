@@ -1,8 +1,7 @@
 import Hopper from "./classes/Hopper.js";
 import Selector from "./classes/Selector.js";
-
-export const canvas = document.querySelector("canvas");
-export const c = canvas.getContext("2d");
+import Painter from "./classes/Painter.js";
+import {debugPanel} from "./eventListeners";
 
 export const config = {
 	board: {
@@ -15,30 +14,34 @@ export const config = {
 		radius: 9
 	},
 
-	mode: {
-		random: true,
-		adventure: false,
-		editor: false
-	},
+	mode: "random",
 
 	physics: {
 		gravity: 0.3,
 		speed: 1.5,
 		terminal: 9.8
+	},
+
+	colors: {
+		empty: "black",
+		movable: "pink",
+		immovable: "grey",
+		exit: "white",
+		spawn: "blue",
 	}
 };
+config.colors.list = [config.colors.empty, config.colors.movable, config.colors.immovable, config.colors.spawn, config.colors.exit]
+
+export const canvas = document.querySelector("canvas");
+export const c = canvas.getContext("2d");
+canvas.width = config.board.size * config.board.spacing;
+canvas.height = config.board.size * config.board.spacing;
 
 export const level = {
 	color: "pink"
 };
 
-export const selector = new Selector();
-
 export let homeAddresses = [];
-
-canvas.width = config.board.size * config.board.spacing;
-canvas.height = config.board.size * config.board.spacing;
-
 export const gameBoard = [
 	[0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0],
 	[2, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
@@ -60,7 +63,10 @@ export const gameBoard = [
 ];
 
 export let hoppers = [];
+export const selector = new Selector();
+export const painter = new Painter();
 function init() {
+	debugPanel.innerHTML = "Playing level"
 	hoppers = [];
 	hoppers.push(new Hopper(48, 0));
 
@@ -83,29 +89,24 @@ function gameLoop() {
 	c.fillRect(0, 0, canvas.width, canvas.height);
 	c.fill();
 
-	// mouseLogic();
-
 	// Draw game board
 	for (let y = 0; y < config.board.size; y++) {
 		for (let x = 0; x < config.board.size; x++) {
 			switch (gameBoard[y][x]) {
 				case 0:
-					c.fillStyle = "black";
+					c.fillStyle = config.colors.empty;
 					break;
 				case 1:
-					c.fillStyle = level.color;
+					c.fillStyle = config.colors.movable;
 					break;
 				case 2:
-					c.fillStyle = "grey";
+					c.fillStyle = config.colors.immovable;
 					break;
 				case 3:
-					c.fillStyle = "blue";
+					c.fillStyle = config.colors.spawn;
 					break;
 				case 4:
-					c.fillStyle = "white";
-					break;
-				case 5:
-					c.fillStyle = "orange";
+					c.fillStyle = config.colors.exit;
 					break;
 			}
 			c.save();
@@ -122,7 +123,11 @@ function gameLoop() {
 		}
 	}
 	// Update and draw selector
-	selector.update();
+	if (config.mode == "editor") {
+		painter.update();
+	} else {
+		selector.update();
+	}
 
 	// Update and draw hoppers
 	hoppers.forEach(hopper => hopper.update());

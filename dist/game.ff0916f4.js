@@ -276,7 +276,10 @@ exports.default = Hopper;
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
-exports.mousedown = exports.mouse = void 0;
+exports.btn_playLevel = exports.btn_levelEditor = exports.debugPanel = exports.mousedown = exports.mouse = void 0;
+
+var _game = require("./game.js");
+
 var mouse = {
   x: 900,
   y: 900
@@ -284,6 +287,7 @@ var mouse = {
 exports.mouse = mouse;
 var mousedown = false;
 exports.mousedown = mousedown;
+// MOUSE
 window.addEventListener("mousemove", function () {
   mouse.x = event.x;
   mouse.y = event.y;
@@ -293,8 +297,37 @@ window.addEventListener("mousedown", function () {
 });
 window.addEventListener("mouseup", function () {
   exports.mousedown = mousedown = false;
+}); // KEYBOARD
+
+var debugPanel = document.getElementById("debug-panel");
+exports.debugPanel = debugPanel;
+var btn_levelEditor = document.getElementById("level-editor");
+exports.btn_levelEditor = btn_levelEditor;
+var btn_playLevel = document.getElementById("play-level");
+exports.btn_playLevel = btn_playLevel;
+btn_levelEditor.addEventListener("click", function () {
+  debugPanel.innerHTML = "Editing level";
+  _game.painter.x = null;
+  _game.painter.y = null;
+  _game.painter.homeX = null;
+  _game.painter.homeY = null;
+  _game.painter.dragging = false;
+  _game.painter.draggingBlock = false;
+  _game.painter.whatBlockWas = null;
+  _game.config.mode = "editor";
 });
-},{}],"game/classes/Selector.js":[function(require,module,exports) {
+btn_playLevel.addEventListener("click", function () {
+  debugPanel.innerHTML = "Playing level";
+  _game.selector.x = null;
+  _game.selector.y = null;
+  _game.selector.homeX = null;
+  _game.selector.homeY = null;
+  _game.selector.dragging = false;
+  _game.selector.draggingBlock = false;
+  _game.selector.whatBlockWas = null;
+  _game.config.mode = "play";
+});
+},{"./game.js":"game/game.js"}],"game/classes/Selector.js":[function(require,module,exports) {
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -476,24 +509,221 @@ function () {
 }();
 
 exports.default = Selector;
+},{"../game.js":"game/game.js","../eventListeners.js":"game/eventListeners.js"}],"game/classes/Painter.js":[function(require,module,exports) {
+"use strict";
+
+Object.defineProperty(exports, "__esModule", {
+  value: true
+});
+exports.default = void 0;
+
+var _game = require("../game.js");
+
+var _eventListeners = require("../eventListeners.js");
+
+function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
+
+function _defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } }
+
+function _createClass(Constructor, protoProps, staticProps) { if (protoProps) _defineProperties(Constructor.prototype, protoProps); if (staticProps) _defineProperties(Constructor, staticProps); return Constructor; }
+
+// During init() we log all movable blocks and create an array of objects that stores the block's home address
+// and current address. Initially home and current are the same.
+// When user first drags a block, its home address is stored in this selector object.
+// Then when user drags the block to another location, we search the 'addresses' array
+// for an object that matches the home address stored in this selector.
+// Its new location is then stored in 'current'.
+// The implication of this is that when the user goes to drag the block again, we loop through this process
+// Only this time, the current address is different to the home address.
+// The home address is referenced when dragging the block around, so that we can't pull the block
+// more than one square away in any direction.
+// Doing things this way means we don't have to have an object for every block, which
+// gives primacy to the level map.
+// This makes life easier when it comes to being able to edit levels etc.
+// We also don't have to loop through a list of block objects every frame, because collisions are handled by
+// the hopper object which only checks for collisions within one square of itself,
+// and the loops in this object are only called when we drag a block.
+var Painter =
+/*#__PURE__*/
+function () {
+  function Painter() {
+    _classCallCheck(this, Painter);
+
+    this.x = null;
+    this.y = null;
+    this.homeX = null;
+    this.homeY = null;
+    this.dragging = false;
+    this.draggingBlock = false;
+    this.whatBlockWas = null;
+  }
+
+  _createClass(Painter, [{
+    key: "update",
+    value: function update() {
+      var _this = this;
+
+      var gridX = Math.floor(_eventListeners.mouse.x / _game.config.board.spacing);
+      var gridY = Math.floor(_eventListeners.mouse.y / _game.config.board.spacing);
+      var newX = Math.floor(this.x / _game.config.board.spacing);
+      var newY = Math.floor(this.y / _game.config.board.spacing); // Helper functions
+
+      var isOverlappingBlock = function isOverlappingBlock() {
+        try {
+          return [1, 2, 3, 4].includes(_game.gameBoard[gridY][gridX]);
+        } catch (_unused) {
+          return false;
+        }
+      };
+
+      var hasStartedDraggingBlock = function hasStartedDraggingBlock() {
+        return !_this.dragging && _eventListeners.mousedown && isOverlappingBlock();
+      };
+
+      var isDraggingEmptySquare = function isDraggingEmptySquare() {
+        return !_this.dragging && _eventListeners.mousedown && !isOverlappingBlock();
+      };
+
+      var hasStoppedDragging = function hasStoppedDragging() {
+        return _this.draggingBlock && !_eventListeners.mousedown;
+      };
+
+      var isPainting = function isPainting() {
+        return _eventListeners.mousedown && _this.draggingBlock;
+      };
+
+      var squareIsEmpty = function squareIsEmpty() {
+        try {
+          return _game.gameBoard[gridY][gridX] == 0;
+        } catch (_unused2) {
+          return false;
+        }
+      };
+
+      var isOverlappingHopper = function isOverlappingHopper() {
+        return _game.hoppers.some(function (hopper) {
+          try {
+            var hopperGridX = Math.floor(hopper.x / _game.config.board.spacing);
+            var hopperGridY = Math.floor(hopper.y / _game.config.board.spacing);
+            return newX == hopperGridX && newY == hopperGridY;
+          } catch (_unused3) {
+            return false;
+          }
+        });
+      };
+
+      if (hasStartedDraggingBlock()) {
+        var address = _game.homeAddresses.filter(function (address) {
+          return address.current.x == gridX && address.current.y == gridY;
+        })[0];
+
+        this.whatBlockWas = _game.gameBoard[gridY][gridX];
+
+        if (this.whatBlockWas == 1) {
+          this.homeX = address.home.x * _game.config.board.spacing;
+          this.homeY = address.home.y * _game.config.board.spacing;
+        }
+
+        this.dragging = true;
+        this.draggingBlock = true;
+        _game.gameBoard[gridY][gridX] = 0;
+      } else if (isDraggingEmptySquare()) {
+        console.log("empty boi");
+        this.dragging = false;
+        this.draggingBlock = false;
+      }
+
+      if (isOverlappingHopper() && this.dragging) {
+        this.draw();
+        return;
+      } else if (hasStoppedDragging()) {
+        var oldHomeX;
+        var oldHomeY;
+
+        _game.homeAddresses.forEach(function (address) {
+          if (address.home.x == Math.floor(_this.homeX / _game.config.board.spacing) && address.home.y == Math.floor(_this.homeY / _game.config.board.spacing)) {
+            oldHomeX = address.home.x;
+            oldHomeY = address.home.y;
+            address.home.x = newX; // set new home if edit mode
+
+            address.home.y = newY;
+            address.current.x = newX;
+            address.current.y = newY;
+          }
+        });
+
+        _game.gameBoard[newY][newX] = this.whatBlockWas; // if (this.whatBlockWas == 1) {
+        // 	gameBoard[oldHomeY][oldHomeX] = 0;
+        // }
+
+        this.dragging = false;
+
+        if (this.draggingBlock) {
+          _game.c.fillStyle = _game.config.colors.list[this.whatBlockWas];
+
+          _game.c.fillRect(this.x, this.y, _game.config.board.spacing, _game.config.board.spacing);
+        }
+
+        this.draggingBlock = false;
+      } else if (isPainting() && squareIsEmpty() && // mouse.x < this.homeX + config.board.spacing * 2 && // Skip these if you want to drag the block anywhere, e.g. during level editing.
+      // mouse.x > this.homeX - config.board.spacing && 
+      // mouse.y < this.homeY + config.board.spacing * 2 &&
+      // mouse.y > this.homeY - config.board.spacing &&
+      _eventListeners.mouse.x < _game.canvas.width && _eventListeners.mouse.x >= 0 && _eventListeners.mouse.y < _game.canvas.height && _eventListeners.mouse.y >= 0) {
+        this.x = Math.floor(_eventListeners.mouse.x / _game.config.board.spacing) * _game.config.board.spacing;
+        this.y = Math.floor(_eventListeners.mouse.y / _game.config.board.spacing) * _game.config.board.spacing;
+      }
+
+      if (isPainting()) {
+        this.draw();
+      }
+    }
+  }, {
+    key: "draw",
+    value: function draw() {
+      _game.c.save();
+
+      _game.c.beginPath();
+
+      _game.c.strokeStyle = "white";
+      _game.c.shadowColor = "white";
+      _game.c.shadowBlur = 12;
+      _game.c.fillStyle = _game.config.colors.list[this.whatBlockWas];
+
+      _game.c.rect(this.x, this.y, _game.config.board.spacing, _game.config.board.spacing);
+
+      _game.c.fillRect(this.x, this.y, _game.config.board.spacing, _game.config.board.spacing);
+
+      _game.c.stroke();
+
+      _game.c.closePath();
+
+      _game.c.restore();
+    }
+  }]);
+
+  return Painter;
+}();
+
+exports.default = Painter;
 },{"../game.js":"game/game.js","../eventListeners.js":"game/eventListeners.js"}],"game/game.js":[function(require,module,exports) {
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
-exports.hoppers = exports.gameBoard = exports.homeAddresses = exports.selector = exports.level = exports.config = exports.c = exports.canvas = void 0;
+exports.painter = exports.selector = exports.hoppers = exports.gameBoard = exports.homeAddresses = exports.level = exports.c = exports.canvas = exports.config = void 0;
 
 var _Hopper = _interopRequireDefault(require("./classes/Hopper.js"));
 
 var _Selector = _interopRequireDefault(require("./classes/Selector.js"));
 
+var _Painter = _interopRequireDefault(require("./classes/Painter.js"));
+
+var _eventListeners = require("./eventListeners");
+
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
-var canvas = document.querySelector("canvas");
-exports.canvas = canvas;
-var c = canvas.getContext("2d");
-exports.c = c;
 var config = {
   board: {
     size: 16,
@@ -503,35 +733,46 @@ var config = {
     color: "green",
     radius: 9
   },
-  mode: {
-    random: true,
-    adventure: false,
-    editor: false
-  },
+  mode: "random",
   physics: {
     gravity: 0.3,
     speed: 1.5,
     terminal: 9.8
+  },
+  colors: {
+    empty: "black",
+    movable: "pink",
+    immovable: "grey",
+    exit: "white",
+    spawn: "blue"
   }
 };
 exports.config = config;
+config.colors.list = [config.colors.empty, config.colors.movable, config.colors.immovable, config.colors.spawn, config.colors.exit];
+var canvas = document.querySelector("canvas");
+exports.canvas = canvas;
+var c = canvas.getContext("2d");
+exports.c = c;
+canvas.width = config.board.size * config.board.spacing;
+canvas.height = config.board.size * config.board.spacing;
 var level = {
   color: "pink"
 };
 exports.level = level;
-var selector = new _Selector.default();
-exports.selector = selector;
 var homeAddresses = [];
 exports.homeAddresses = homeAddresses;
-canvas.width = config.board.size * config.board.spacing;
-canvas.height = config.board.size * config.board.spacing;
 var gameBoard = [[0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0], [2, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], [2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 1, 1, 1, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0, 2, 2, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 2, 1, 2, 0, 1, 0, 0, 0, 0, 0, 0], [0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0], [0, 0, 1, 0, 1, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0], [0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 2, 2, 1, 0, 0], [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1], [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] // <- stops falling errors occuring
 ];
 exports.gameBoard = gameBoard;
 var hoppers = [];
 exports.hoppers = hoppers;
+var selector = new _Selector.default();
+exports.selector = selector;
+var painter = new _Painter.default();
+exports.painter = painter;
 
 function init() {
+  _eventListeners.debugPanel.innerHTML = "Playing level";
   exports.hoppers = hoppers = [];
   hoppers.push(new _Hopper.default(48, 0));
 
@@ -557,34 +798,29 @@ function gameLoop() {
   requestAnimationFrame(gameLoop);
   c.fillStyle = "black";
   c.fillRect(0, 0, canvas.width, canvas.height);
-  c.fill(); // mouseLogic();
-  // Draw game board
+  c.fill(); // Draw game board
 
   for (var y = 0; y < config.board.size; y++) {
     for (var x = 0; x < config.board.size; x++) {
       switch (gameBoard[y][x]) {
         case 0:
-          c.fillStyle = "black";
+          c.fillStyle = config.colors.empty;
           break;
 
         case 1:
-          c.fillStyle = level.color;
+          c.fillStyle = config.colors.movable;
           break;
 
         case 2:
-          c.fillStyle = "grey";
+          c.fillStyle = config.colors.immovable;
           break;
 
         case 3:
-          c.fillStyle = "blue";
+          c.fillStyle = config.colors.spawn;
           break;
 
         case 4:
-          c.fillStyle = "white";
-          break;
-
-        case 5:
-          c.fillStyle = "orange";
+          c.fillStyle = config.colors.exit;
           break;
       }
 
@@ -598,7 +834,12 @@ function gameLoop() {
   } // Update and draw selector
 
 
-  selector.update(); // Update and draw hoppers
+  if (config.mode == "editor") {
+    painter.update();
+  } else {
+    selector.update();
+  } // Update and draw hoppers
+
 
   hoppers.forEach(function (hopper) {
     return hopper.update();
@@ -607,7 +848,7 @@ function gameLoop() {
 
 init();
 gameLoop();
-},{"./classes/Hopper.js":"game/classes/Hopper.js","./classes/Selector.js":"game/classes/Selector.js"}],"../../../../../usr/local/lib/node_modules/parcel-bundler/src/builtins/hmr-runtime.js":[function(require,module,exports) {
+},{"./classes/Hopper.js":"game/classes/Hopper.js","./classes/Selector.js":"game/classes/Selector.js","./classes/Painter.js":"game/classes/Painter.js","./eventListeners":"game/eventListeners.js"}],"../../../../../usr/local/lib/node_modules/parcel-bundler/src/builtins/hmr-runtime.js":[function(require,module,exports) {
 var global = arguments[3];
 var OVERLAY_ID = '__parcel__error__overlay__';
 var OldModule = module.bundle.Module;
@@ -635,7 +876,7 @@ var parent = module.bundle.parent;
 if ((!parent || !parent.isParcelRequire) && typeof WebSocket !== 'undefined') {
   var hostname = "" || location.hostname;
   var protocol = location.protocol === 'https:' ? 'wss' : 'ws';
-  var ws = new WebSocket(protocol + '://' + hostname + ':' + "57257" + '/');
+  var ws = new WebSocket(protocol + '://' + hostname + ':' + "58622" + '/');
 
   ws.onmessage = function (event) {
     checkedAssets = {};
