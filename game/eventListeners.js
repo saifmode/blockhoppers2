@@ -4,7 +4,7 @@ export let mousedown = false;
 import { config } from "./game.js";
 import { gameBoard } from "./game.js";
 import { selector } from "./game.js";
-import { painter } from "./game.js";
+import { dragger } from "./game.js";
 
 // MOUSE
 window.addEventListener("mousemove", () => {
@@ -26,13 +26,13 @@ export const btn_playLevel = document.getElementById("play-level");
 
 btn_levelEditor.addEventListener("click", () => {
 	debugPanel.innerHTML = "Editing level";
-	painter.x = null;
-	painter.y = null;
-	painter.homeX = null;
-	painter.homeY = null;
-	painter.dragging = false;
-	painter.draggingBlock = false;
-	painter.whatBlockWas = null;
+	dragger.x = null;
+	dragger.y = null;
+	dragger.homeX = null;
+	dragger.homeY = null;
+	dragger.dragging = false;
+	dragger.draggingBlock = false;
+	dragger.whatBlockWas = null;
 	config.mode = "editor";
 });
 btn_playLevel.addEventListener("click", () => {

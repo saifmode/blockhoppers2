@@ -307,13 +307,13 @@ var btn_playLevel = document.getElementById("play-level");
 exports.btn_playLevel = btn_playLevel;
 btn_levelEditor.addEventListener("click", function () {
   debugPanel.innerHTML = "Editing level";
-  _game.painter.x = null;
-  _game.painter.y = null;
-  _game.painter.homeX = null;
-  _game.painter.homeY = null;
-  _game.painter.dragging = false;
-  _game.painter.draggingBlock = false;
-  _game.painter.whatBlockWas = null;
+  _game.dragger.x = null;
+  _game.dragger.y = null;
+  _game.dragger.homeX = null;
+  _game.dragger.homeY = null;
+  _game.dragger.dragging = false;
+  _game.dragger.draggingBlock = false;
+  _game.dragger.whatBlockWas = null;
   _game.config.mode = "editor";
 });
 btn_playLevel.addEventListener("click", function () {
@@ -381,99 +381,170 @@ function () {
     value: function update() {
       var _this = this;
 
-      var gridX = Math.floor(_eventListeners.mouse.x / _game.config.board.spacing);
-      var gridY = Math.floor(_eventListeners.mouse.y / _game.config.board.spacing);
-      var newX = Math.floor(this.x / _game.config.board.spacing);
-      var newY = Math.floor(this.y / _game.config.board.spacing); // Helper functions
+      var mouseGridX = Math.floor(_eventListeners.mouse.x / _game.config.board.spacing);
+      var mouseGridY = Math.floor(_eventListeners.mouse.y / _game.config.board.spacing);
+      var thisBlockX = Math.floor(this.x / _game.config.board.spacing);
+      var thisBlockY = Math.floor(this.y / _game.config.board.spacing);
+      var colorOfBlock = _game.config.colors.list[this.whatBlockWas]; // Helper functions
 
-      var isOverlappingBlock = function isOverlappingBlock() {
+      var getHomeAddress = function getHomeAddress() {
+        var address = _game.homeAddresses.filter(function (address) {
+          return address.current.x == mouseGridX && address.current.y == mouseGridY;
+        })[0]; // First key of address in object is home address, hence [0]
+
+
+        _this.homeX = address.home.x * _game.config.board.spacing;
+        _this.homeY = address.home.y * _game.config.board.spacing;
+        _this.whatBlockWas = _game.gameBoard[mouseGridY][mouseGridX];
+      };
+
+      var setNewCurrentAddress = function setNewCurrentAddress() {
+        _game.homeAddresses.forEach(function (address) {
+          if (address.home.x == Math.floor(_this.homeX / _game.config.board.spacing) && address.home.y == Math.floor(_this.homeY / _game.config.board.spacing)) {
+            address.current.x = thisBlockX;
+            address.current.y = thisBlockY;
+          }
+        });
+      };
+
+      var dropBlockOnEmptySquare = function dropBlockOnEmptySquare() {
+        _this.dragging = false;
+        setNewCurrentAddress();
+        _game.gameBoard[thisBlockY][thisBlockX] = _this.whatBlockWas;
+
+        if (_this.draggingBlock) {
+          _game.c.fillStyle = "pink";
+
+          _game.c.fillRect(_this.x, _this.y, _game.config.board.spacing, _game.config.board.spacing);
+        }
+
+        _this.draggingBlock = false;
+      };
+
+      var moveBlockToMousePosition = function moveBlockToMousePosition() {
+        _this.x = Math.floor(_eventListeners.mouse.x / _game.config.board.spacing) * _game.config.board.spacing;
+        _this.y = Math.floor(_eventListeners.mouse.y / _game.config.board.spacing) * _game.config.board.spacing;
+      }; // Methods
+      // Level 1
+      // Skip mouseIsInHomeRange tests if you want to drag the block anywhere, e.g. during level editing.
+
+
+      var mouseIsInHomeRange = function mouseIsInHomeRange() {
+        return _eventListeners.mouse.x < _this.homeX + _game.config.board.spacing * 2 && _eventListeners.mouse.x > _this.homeX - _game.config.board.spacing && _eventListeners.mouse.y < _this.homeY + _game.config.board.spacing * 2 && _eventListeners.mouse.y > _this.homeY - _game.config.board.spacing && _eventListeners.mouse.x < _game.canvas.width && _eventListeners.mouse.x >= 0 && _eventListeners.mouse.y < _game.canvas.height && _eventListeners.mouse.y >= 0;
+      };
+
+      var mouseIsOverlappingBlock = function mouseIsOverlappingBlock() {
         try {
-          return _game.gameBoard[gridY][gridX] == 1;
+          return _game.gameBoard[mouseGridY][mouseGridX] == 1;
         } catch (_unused) {
           return false;
         }
-      };
-
-      var hasStartedDraggingBlock = function hasStartedDraggingBlock() {
-        return !_this.dragging && _eventListeners.mousedown && isOverlappingBlock();
-      };
-
-      var isDraggingEmptySquare = function isDraggingEmptySquare() {
-        return !_this.dragging && _eventListeners.mousedown && !isOverlappingBlock();
       };
 
       var hasStoppedDragging = function hasStoppedDragging() {
         return _this.dragging && !_eventListeners.mousedown;
       };
 
-      var isPainting = function isPainting() {
-        return _eventListeners.mousedown && _this.draggingBlock;
+      var hasStoppedDraggingBlock = function hasStoppedDraggingBlock() {
+        return _this.draggingBlock && !_eventListeners.mousedown;
       };
 
-      var squareIsEmpty = function squareIsEmpty() {
+      var isDraggingBlock = function isDraggingBlock() {
+        return _this.draggingBlock && _eventListeners.mousedown;
+      };
+
+      var mouseOverlappingEmptySquare = function mouseOverlappingEmptySquare() {
         try {
-          return _game.gameBoard[gridY][gridX] == 0;
+          return _game.gameBoard[mouseGridY][mouseGridX] == 0;
         } catch (_unused2) {
           return false;
         }
       };
 
-      var isOverlappingHopper = function isOverlappingHopper() {
+      var blockOverlappingEmptySquare = function blockOverlappingEmptySquare() {
+        try {
+          return _game.gameBoard[thisBlockY][thisBlockX] == 0;
+        } catch (_unused3) {
+          return false;
+        }
+      };
+
+      var mouseOverlappingHopper = function mouseOverlappingHopper() {
         return _game.hoppers.some(function (hopper) {
           try {
             var hopperGridX = Math.floor(hopper.x / _game.config.board.spacing);
             var hopperGridY = Math.floor(hopper.y / _game.config.board.spacing);
-            return newX == hopperGridX && newY == hopperGridY;
-          } catch (_unused3) {
+            return mouseGridX == hopperGridX && mouseGridY == hopperGridY; // change to new if bugs occur
+          } catch (_unused4) {
             return false;
           }
         });
       };
 
-      if (hasStartedDraggingBlock()) {
-        var address = _game.homeAddresses.filter(function (address) {
-          return address.current.x == gridX && address.current.y == gridY;
-        })[0];
-
-        this.homeX = address.home.x * _game.config.board.spacing;
-        this.homeY = address.home.y * _game.config.board.spacing;
-        this.whatBlockWas = _game.gameBoard[gridY][gridX];
-        this.dragging = true;
-        this.draggingBlock = true;
-        _game.gameBoard[gridY][gridX] = 0;
-      } else if (isDraggingEmptySquare()) {
-        this.dragging = true;
-        this.draggingBlock = false;
-      }
-
-      if (isOverlappingHopper() && this.dragging) {
-        this.draw();
-        return;
-      } else if (hasStoppedDragging()) {
-        _game.homeAddresses.forEach(function (address) {
-          if (address.home.x == Math.floor(_this.homeX / _game.config.board.spacing) && address.home.y == Math.floor(_this.homeY / _game.config.board.spacing)) {
-            address.current.x = newX;
-            address.current.y = newY;
+      var blockOverlappingHopper = function blockOverlappingHopper() {
+        return _game.hoppers.some(function (hopper) {
+          try {
+            var hopperGridX = Math.floor(hopper.x / _game.config.board.spacing);
+            var hopperGridY = Math.floor(hopper.y / _game.config.board.spacing);
+            return thisBlockX == hopperGridX && thisBlockY == hopperGridY; // chjange to new if bugs occur
+          } catch (_unused5) {
+            return false;
           }
         });
+      }; // Level2
 
-        _game.gameBoard[newY][newX] = this.whatBlockWas;
-        this.dragging = false;
 
-        if (this.draggingBlock) {
-          _game.c.fillStyle = "pink";
+      var hasStartedDraggingBlock = function hasStartedDraggingBlock() {
+        return !_this.draggingBlock && _eventListeners.mousedown && mouseIsOverlappingBlock();
+      };
 
-          _game.c.fillRect(this.x, this.y, _game.config.board.spacing, _game.config.board.spacing);
-        }
+      var hasStartedDraggingNothing = function hasStartedDraggingNothing() {
+        return !_this.dragging && _eventListeners.mousedown && !mouseIsOverlappingBlock();
+      };
 
+      var isDraggingBlockOverHopper = function isDraggingBlockOverHopper() {
+        return blockOverlappingHopper() && isDraggingBlock();
+      };
+
+      var hasDroppedBlockOnHopper = function hasDroppedBlockOnHopper() {
+        return hasStoppedDraggingBlock() && mouseOverlappingHopper() && !isDraggingBlockOverHopper();
+      };
+
+      var isDraggingOverEmptySquare = function isDraggingOverEmptySquare() {
+        return isDraggingBlock() && mouseOverlappingEmptySquare() && !mouseOverlappingHopper();
+      };
+
+      var hasDroppedBlockOnEmptySquare = function hasDroppedBlockOnEmptySquare() {
+        return hasStoppedDraggingBlock() && !mouseOverlappingHopper() && blockOverlappingEmptySquare() && !blockOverlappingHopper();
+      };
+
+      if (hasStartedDraggingBlock()) {
+        getHomeAddress();
+        this.dragging = true;
+        this.draggingBlock = true;
+        _game.gameBoard[mouseGridY][mouseGridX] = 0;
+      } else if (hasStartedDraggingNothing()) {
+        this.dragging = true;
         this.draggingBlock = false;
-      } else if (isPainting() && squareIsEmpty() && _eventListeners.mouse.x < this.homeX + _game.config.board.spacing * 2 && // Skip these if you want to drag the block anywhere, e.g. during level editing.
-      _eventListeners.mouse.x > this.homeX - _game.config.board.spacing && _eventListeners.mouse.y < this.homeY + _game.config.board.spacing * 2 && _eventListeners.mouse.y > this.homeY - _game.config.board.spacing && _eventListeners.mouse.x < _game.canvas.width && _eventListeners.mouse.x >= 0 && _eventListeners.mouse.y < _game.canvas.height && _eventListeners.mouse.y >= 0) {
-        this.x = Math.floor(_eventListeners.mouse.x / _game.config.board.spacing) * _game.config.board.spacing;
-        this.y = Math.floor(_eventListeners.mouse.y / _game.config.board.spacing) * _game.config.board.spacing;
       }
 
-      if (isPainting()) {
+      if (blockOverlappingHopper() && mouseOverlappingHopper()) {
+        this.draw();
+        return;
+      } else if (blockOverlappingHopper() && !mouseOverlappingHopper() && mouseOverlappingEmptySquare() && mouseIsInHomeRange()) {
+        moveBlockToMousePosition();
+      } else if (blockOverlappingHopper() && (!mouseIsInHomeRange() || !mouseOverlappingEmptySquare())) {
+        this.draw();
+        return;
+      }
+
+      if (isDraggingOverEmptySquare() && mouseIsInHomeRange()) {
+        moveBlockToMousePosition();
+      } else if (hasDroppedBlockOnEmptySquare() || hasDroppedBlockOnHopper()) {
+        dropBlockOnEmptySquare();
+      }
+
+      if (isDraggingBlock()) {
         this.draw();
       }
     }
@@ -509,7 +580,7 @@ function () {
 }();
 
 exports.default = Selector;
-},{"../game.js":"game/game.js","../eventListeners.js":"game/eventListeners.js"}],"game/classes/Painter.js":[function(require,module,exports) {
+},{"../game.js":"game/game.js","../eventListeners.js":"game/eventListeners.js"}],"game/classes/Dragger.js":[function(require,module,exports) {
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -527,27 +598,11 @@ function _defineProperties(target, props) { for (var i = 0; i < props.length; i+
 
 function _createClass(Constructor, protoProps, staticProps) { if (protoProps) _defineProperties(Constructor.prototype, protoProps); if (staticProps) _defineProperties(Constructor, staticProps); return Constructor; }
 
-// During init() we log all movable blocks and create an array of objects that stores the block's home address
-// and current address. Initially home and current are the same.
-// When user first drags a block, its home address is stored in this selector object.
-// Then when user drags the block to another location, we search the 'addresses' array
-// for an object that matches the home address stored in this selector.
-// Its new location is then stored in 'current'.
-// The implication of this is that when the user goes to drag the block again, we loop through this process
-// Only this time, the current address is different to the home address.
-// The home address is referenced when dragging the block around, so that we can't pull the block
-// more than one square away in any direction.
-// Doing things this way means we don't have to have an object for every block, which
-// gives primacy to the level map.
-// This makes life easier when it comes to being able to edit levels etc.
-// We also don't have to loop through a list of block objects every frame, because collisions are handled by
-// the hopper object which only checks for collisions within one square of itself,
-// and the loops in this object are only called when we drag a block.
-var Painter =
+var Dragger =
 /*#__PURE__*/
 function () {
-  function Painter() {
-    _classCallCheck(this, Painter);
+  function Dragger() {
+    _classCallCheck(this, Dragger);
 
     this.x = null;
     this.y = null;
@@ -558,85 +613,38 @@ function () {
     this.whatBlockWas = null;
   }
 
-  _createClass(Painter, [{
+  _createClass(Dragger, [{
     key: "update",
     value: function update() {
       var _this = this;
 
-      var gridX = Math.floor(_eventListeners.mouse.x / _game.config.board.spacing);
-      var gridY = Math.floor(_eventListeners.mouse.y / _game.config.board.spacing);
-      var newX = Math.floor(this.x / _game.config.board.spacing);
-      var newY = Math.floor(this.y / _game.config.board.spacing); // Helper functions
+      var mouseGridX = Math.floor(_eventListeners.mouse.x / _game.config.board.spacing);
+      var mouseGridY = Math.floor(_eventListeners.mouse.y / _game.config.board.spacing);
+      var thisBlockX = Math.floor(this.x / _game.config.board.spacing);
+      var thisBlockY = Math.floor(this.y / _game.config.board.spacing);
+      var colorOfBlock = _game.config.colors.list[this.whatBlockWas]; // Helper functions
 
-      var isOverlappingBlock = function isOverlappingBlock() {
-        try {
-          return [1, 2, 3, 4].includes(_game.gameBoard[gridY][gridX]);
-        } catch (_unused) {
-          return false;
-        }
+      var getHomeAddress = function getHomeAddress() {
+        var address = _game.homeAddresses.filter(function (address) {
+          return address.current.x == mouseGridX && address.current.y == mouseGridY;
+        })[0];
+
+        _this.homeX = address.home.x * _game.config.board.spacing;
+        _this.homeY = address.home.y * _game.config.board.spacing;
       };
 
-      var hasStartedDraggingBlock = function hasStartedDraggingBlock() {
-        return !_this.dragging && _eventListeners.mousedown && isOverlappingBlock();
-      };
+      var setNewCurrentAddress = function setNewCurrentAddress() {
+        console.log("Test");
 
-      var isDraggingEmptySquare = function isDraggingEmptySquare() {
-        return !_this.dragging && _eventListeners.mousedown && !isOverlappingBlock();
-      };
-
-      var hasStoppedDragging = function hasStoppedDragging() {
-        return _this.draggingBlock && !_eventListeners.mousedown;
-      };
-
-      var isPainting = function isPainting() {
-        return _eventListeners.mousedown && _this.draggingBlock;
-      };
-
-      var squareIsEmpty = function squareIsEmpty() {
-        try {
-          return _game.gameBoard[gridY][gridX] == 0;
-        } catch (_unused2) {
-          return false;
-        }
-      };
-
-      var isOverlappingHopper = function isOverlappingHopper() {
-        return _game.hoppers.some(function (hopper) {
-          try {
-            var hopperGridX = Math.floor(hopper.x / _game.config.board.spacing);
-            var hopperGridY = Math.floor(hopper.y / _game.config.board.spacing);
-            return newX == hopperGridX && newY == hopperGridY;
-          } catch (_unused3) {
-            return false;
+        _game.homeAddresses.forEach(function (address) {
+          if (address.home.x == Math.floor(_this.homeX / _game.config.board.spacing) && address.home.y == Math.floor(_this.homeY / _game.config.board.spacing)) {
+            address.current.x = thisBlockX;
+            address.current.y = thisBlockY;
           }
         });
       };
 
-      if (hasStartedDraggingBlock()) {
-        var address = _game.homeAddresses.filter(function (address) {
-          return address.current.x == gridX && address.current.y == gridY;
-        })[0];
-
-        this.whatBlockWas = _game.gameBoard[gridY][gridX];
-
-        if (this.whatBlockWas == 1) {
-          this.homeX = address.home.x * _game.config.board.spacing;
-          this.homeY = address.home.y * _game.config.board.spacing;
-        }
-
-        this.dragging = true;
-        this.draggingBlock = true;
-        _game.gameBoard[gridY][gridX] = 0;
-      } else if (isDraggingEmptySquare()) {
-        console.log("empty boi");
-        this.dragging = false;
-        this.draggingBlock = false;
-      }
-
-      if (isOverlappingHopper() && this.dragging) {
-        this.draw();
-        return;
-      } else if (hasStoppedDragging()) {
+      var setHomeAddress = function setHomeAddress() {
         var oldHomeX;
         var oldHomeY;
 
@@ -644,39 +652,267 @@ function () {
           if (address.home.x == Math.floor(_this.homeX / _game.config.board.spacing) && address.home.y == Math.floor(_this.homeY / _game.config.board.spacing)) {
             oldHomeX = address.home.x;
             oldHomeY = address.home.y;
-            address.home.x = newX; // set new home if edit mode
+            address.home.x = thisBlockX; // set new home if edit mode
 
-            address.home.y = newY;
-            address.current.x = newX;
-            address.current.y = newY;
+            address.home.y = thisBlockY;
+            address.current.x = thisBlockX;
+            address.current.y = thisBlockY;
           }
         });
+      };
 
-        _game.gameBoard[newY][newX] = this.whatBlockWas; // if (this.whatBlockWas == 1) {
-        // 	gameBoard[oldHomeY][oldHomeX] = 0;
-        // }
+      var dropBlockOnEmptySquare = function dropBlockOnEmptySquare() {
+        _this.dragging = false;
 
-        this.dragging = false;
-
-        if (this.draggingBlock) {
-          _game.c.fillStyle = _game.config.colors.list[this.whatBlockWas];
-
-          _game.c.fillRect(this.x, this.y, _game.config.board.spacing, _game.config.board.spacing);
+        if (_this.whatBlockWas == 1) {
+          setHomeAddress();
         }
 
+        _game.gameBoard[thisBlockY][thisBlockX] = _this.whatBlockWas;
+
+        if (_this.draggingBlock) {
+          _game.c.fillStyle = "pink";
+
+          _game.c.fillRect(_this.x, _this.y, _game.config.board.spacing, _game.config.board.spacing);
+        }
+
+        _this.draggingBlock = false;
+      };
+
+      var moveBlockToMousePosition = function moveBlockToMousePosition() {
+        _this.x = Math.floor(_eventListeners.mouse.x / _game.config.board.spacing) * _game.config.board.spacing;
+        _this.y = Math.floor(_eventListeners.mouse.y / _game.config.board.spacing) * _game.config.board.spacing;
+      }; // Methods
+      // Level 1
+      // Skip mouseIsInHomeRange tests if you want to drag the block anywhere, e.g. during level editing.
+
+
+      var mouseIsInHomeRange = function mouseIsInHomeRange() {
+        return (// mouse.x < this.homeX + config.board.spacing * 2 &&
+          // mouse.x > this.homeX - config.board.spacing &&
+          // mouse.y < this.homeY + config.board.spacing * 2 &&
+          // mouse.y > this.homeY - config.board.spacing &&
+          _eventListeners.mouse.x < _game.canvas.width && _eventListeners.mouse.x >= 0 && _eventListeners.mouse.y < _game.canvas.height && _eventListeners.mouse.y >= 0
+        );
+      };
+
+      var mouseIsOverlappingBlock = function mouseIsOverlappingBlock() {
+        try {
+          return [1, 2, 3, 4].includes(_game.gameBoard[mouseGridY][mouseGridX]);
+        } catch (_unused) {
+          return false;
+        }
+      };
+
+      var hasStoppedDragging = function hasStoppedDragging() {
+        return _this.dragging && !_eventListeners.mousedown;
+      };
+
+      var hasStoppedDraggingBlock = function hasStoppedDraggingBlock() {
+        return _this.draggingBlock && !_eventListeners.mousedown;
+      };
+
+      var isDraggingBlock = function isDraggingBlock() {
+        return _this.draggingBlock && _eventListeners.mousedown;
+      };
+
+      var mouseOverlappingEmptySquare = function mouseOverlappingEmptySquare() {
+        try {
+          return _game.gameBoard[mouseGridY][mouseGridX] == 0;
+        } catch (_unused2) {
+          return false;
+        }
+      };
+
+      var blockOverlappingEmptySquare = function blockOverlappingEmptySquare() {
+        try {
+          return _game.gameBoard[thisBlockY][thisBlockX] == 0;
+        } catch (_unused3) {
+          return false;
+        }
+      };
+
+      var mouseOverlappingHopper = function mouseOverlappingHopper() {
+        return _game.hoppers.some(function (hopper) {
+          try {
+            var hopperGridX = Math.floor(hopper.x / _game.config.board.spacing);
+            var hopperGridY = Math.floor(hopper.y / _game.config.board.spacing);
+            return mouseGridX == hopperGridX && mouseGridY == hopperGridY; // change to new if bugs occur
+          } catch (_unused4) {
+            return false;
+          }
+        });
+      };
+
+      var blockOverlappingHopper = function blockOverlappingHopper() {
+        return _game.hoppers.some(function (hopper) {
+          try {
+            var hopperGridX = Math.floor(hopper.x / _game.config.board.spacing);
+            var hopperGridY = Math.floor(hopper.y / _game.config.board.spacing);
+            return thisBlockX == hopperGridX && thisBlockY == hopperGridY;
+          } catch (_unused5) {
+            return false;
+          }
+        });
+      }; // Level2
+
+
+      var hasStartedDraggingBlock = function hasStartedDraggingBlock() {
+        return !_this.draggingBlock && _eventListeners.mousedown && mouseIsOverlappingBlock();
+      };
+
+      var hasStartedDraggingNothing = function hasStartedDraggingNothing() {
+        return !_this.dragging && _eventListeners.mousedown && !mouseIsOverlappingBlock();
+      };
+
+      var isDraggingBlockOverHopper = function isDraggingBlockOverHopper() {
+        return blockOverlappingHopper() && isDraggingBlock();
+      };
+
+      var hasDroppedBlockOnHopper = function hasDroppedBlockOnHopper() {
+        return hasStoppedDraggingBlock() && mouseOverlappingHopper() && !isDraggingBlockOverHopper();
+      };
+
+      var isDraggingOverEmptySquare = function isDraggingOverEmptySquare() {
+        return isDraggingBlock() && mouseOverlappingEmptySquare() && !mouseOverlappingHopper();
+      };
+
+      var hasDroppedBlockOnEmptySquare = function hasDroppedBlockOnEmptySquare() {
+        return hasStoppedDraggingBlock() && !mouseOverlappingHopper() && blockOverlappingEmptySquare() && !blockOverlappingHopper();
+      };
+
+      if (hasStartedDraggingBlock()) {
+        this.whatBlockWas = _game.gameBoard[mouseGridY][mouseGridX];
+
+        if (this.whatBlockWas == 1) {
+          getHomeAddress();
+        }
+
+        this.dragging = true;
+        this.draggingBlock = true;
+        _game.gameBoard[mouseGridY][mouseGridX] = 0;
+      } else if (hasStartedDraggingNothing()) {
+        this.dragging = true;
         this.draggingBlock = false;
-      } else if (isPainting() && squareIsEmpty() && // mouse.x < this.homeX + config.board.spacing * 2 && // Skip these if you want to drag the block anywhere, e.g. during level editing.
-      // mouse.x > this.homeX - config.board.spacing && 
-      // mouse.y < this.homeY + config.board.spacing * 2 &&
-      // mouse.y > this.homeY - config.board.spacing &&
-      _eventListeners.mouse.x < _game.canvas.width && _eventListeners.mouse.x >= 0 && _eventListeners.mouse.y < _game.canvas.height && _eventListeners.mouse.y >= 0) {
-        this.x = Math.floor(_eventListeners.mouse.x / _game.config.board.spacing) * _game.config.board.spacing;
-        this.y = Math.floor(_eventListeners.mouse.y / _game.config.board.spacing) * _game.config.board.spacing;
       }
 
-      if (isPainting()) {
+      if (blockOverlappingHopper() && mouseOverlappingHopper()) {
+        this.draw();
+        return;
+      } else if (blockOverlappingHopper() && !mouseOverlappingHopper() && mouseOverlappingEmptySquare() && mouseIsInHomeRange()) {
+        moveBlockToMousePosition();
+      } else if (blockOverlappingHopper() && (!mouseIsInHomeRange() || !mouseOverlappingEmptySquare())) {
+        this.draw();
+        return;
+      }
+
+      if (isDraggingOverEmptySquare() && mouseIsInHomeRange()) {
+        moveBlockToMousePosition();
+      } else if (hasDroppedBlockOnEmptySquare() || hasDroppedBlockOnHopper()) {
+        dropBlockOnEmptySquare();
+      }
+
+      if (isDraggingBlock()) {
         this.draw();
       }
+      /*
+      let mouseGridX = Math.floor(mouse.x / config.board.spacing);
+      let mouseGridY = Math.floor(mouse.y / config.board.spacing);
+      let thisBlockX = Math.floor(this.x / config.board.spacing);
+      let thisBlockY = Math.floor(this.y / config.board.spacing);
+      	// Helper functions
+      let isOverlappingBlock = () => {
+      	try {
+      		return [1, 2, 3, 4].includes(gameBoard[mouseGridY][mouseGridX]);
+      	} catch {
+      		return false;
+      	}
+      };
+      	let hasStartedDraggingBlock = () =>
+      	!this.dragging && mousedown && isOverlappingBlock();
+      let isDraggingEmptySquare = () =>
+      	!this.dragging && mousedown && !isOverlappingBlock();
+      let hasStoppedDragging = () => this.draggingBlock && !mousedown;
+      let isPainting = () => mousedown && this.draggingBlock;
+      let squareIsEmpty = () => {
+      	try {
+      		return gameBoard[mouseGridY][mouseGridX] == 0;
+      	} catch {
+      		return false;
+      	}
+      };
+      let isOverlappingHopper = () =>
+      	hoppers.some(hopper => {
+      		try {
+      			let hopperGridX = Math.floor(
+      				hopper.x / config.board.spacing
+      			);
+      			let hopperGridY = Math.floor(
+      				hopper.y / config.board.spacing
+      			);
+      			return mouseGridX == hopperGridX && mouseGridY == hopperGridY; // careful of bugs swapping grid and new
+      		} catch {
+      			return false;
+      		}
+      	});
+      	if (hasStartedDraggingBlock()) {
+      	let address = homeAddresses.filter(
+      		address =>
+      			address.current.x == mouseGridX && address.current.y == mouseGridY
+      	)[0];
+      	this.whatBlockWas = gameBoard[mouseGridY][mouseGridX];
+      	if (this.whatBlockWas == 1) {
+      		this.homeX = address.home.x * config.board.spacing;
+      		this.homeY = address.home.y * config.board.spacing;
+      	}
+      	this.dragging = true;
+      	this.draggingBlock = true;
+      	gameBoard[mouseGridY][mouseGridX] = 0;
+      } else if (isDraggingEmptySquare()) {
+      	console.log("empty boi");
+      	this.dragging = false;
+      	this.draggingBlock = false;
+      }
+      	if (isOverlappingHopper() && this.draggingBlock && mousedown) {
+      	this.draw();
+      	return;
+      } else if (hasStoppedDragging() && isOverlappingHopper()) {
+      	this.draw();
+      	return;
+      } else if (hasStoppedDragging() && !isOverlappingHopper()) {
+      	setHomeAddress();
+      	gameBoard[thisBlockY][thisBlockX] = this.whatBlockWas;
+      	this.dragging = false;
+      	if (this.draggingBlock) {
+      		c.fillStyle = config.colors.list[this.whatBlockWas];
+      		c.fillRect(
+      			this.x,
+      			this.y,
+      			config.board.spacing,
+      			config.board.spacing
+      		);
+      	}
+      	this.draggingBlock = false;
+      } else if (
+      	isPainting() &&
+      	squareIsEmpty() &&
+      	mouse.x < canvas.width &&
+      	mouse.x >= 0 &&
+      	mouse.y < canvas.height &&
+      	mouse.y >= 0
+      ) {
+      	this.x =
+      		Math.floor(mouse.x / config.board.spacing) *
+      		config.board.spacing;
+      	this.y =
+      		Math.floor(mouse.y / config.board.spacing) *
+      		config.board.spacing;
+      }
+      	if (isPainting()) {
+      	this.draw();
+      }
+      */
+
     }
   }, {
     key: "draw",
@@ -702,23 +938,23 @@ function () {
     }
   }]);
 
-  return Painter;
+  return Dragger;
 }();
 
-exports.default = Painter;
+exports.default = Dragger;
 },{"../game.js":"game/game.js","../eventListeners.js":"game/eventListeners.js"}],"game/game.js":[function(require,module,exports) {
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
-exports.painter = exports.selector = exports.hoppers = exports.gameBoard = exports.homeAddresses = exports.level = exports.c = exports.canvas = exports.config = void 0;
+exports.dragger = exports.selector = exports.hoppers = exports.gameBoard = exports.homeAddresses = exports.level = exports.c = exports.canvas = exports.config = void 0;
 
 var _Hopper = _interopRequireDefault(require("./classes/Hopper.js"));
 
 var _Selector = _interopRequireDefault(require("./classes/Selector.js"));
 
-var _Painter = _interopRequireDefault(require("./classes/Painter.js"));
+var _Dragger = _interopRequireDefault(require("./classes/Dragger.js"));
 
 var _eventListeners = require("./eventListeners");
 
@@ -768,8 +1004,8 @@ var hoppers = [];
 exports.hoppers = hoppers;
 var selector = new _Selector.default();
 exports.selector = selector;
-var painter = new _Painter.default();
-exports.painter = painter;
+var dragger = new _Dragger.default();
+exports.dragger = dragger;
 
 function init() {
   _eventListeners.debugPanel.innerHTML = "Playing level";
@@ -835,7 +1071,7 @@ function gameLoop() {
 
 
   if (config.mode == "editor") {
-    painter.update();
+    dragger.update();
   } else {
     selector.update();
   } // Update and draw hoppers
@@ -848,7 +1084,7 @@ function gameLoop() {
 
 init();
 gameLoop();
-},{"./classes/Hopper.js":"game/classes/Hopper.js","./classes/Selector.js":"game/classes/Selector.js","./classes/Painter.js":"game/classes/Painter.js","./eventListeners":"game/eventListeners.js"}],"../../../../../usr/local/lib/node_modules/parcel-bundler/src/builtins/hmr-runtime.js":[function(require,module,exports) {
+},{"./classes/Hopper.js":"game/classes/Hopper.js","./classes/Selector.js":"game/classes/Selector.js","./classes/Dragger.js":"game/classes/Dragger.js","./eventListeners":"game/eventListeners.js"}],"../../../../../usr/local/lib/node_modules/parcel-bundler/src/builtins/hmr-runtime.js":[function(require,module,exports) {
 var global = arguments[3];
 var OVERLAY_ID = '__parcel__error__overlay__';
 var OldModule = module.bundle.Module;
@@ -876,7 +1112,7 @@ var parent = module.bundle.parent;
 if ((!parent || !parent.isParcelRequire) && typeof WebSocket !== 'undefined') {
   var hostname = "" || location.hostname;
   var protocol = location.protocol === 'https:' ? 'wss' : 'ws';
-  var ws = new WebSocket(protocol + '://' + hostname + ':' + "58622" + '/');
+  var ws = new WebSocket(protocol + '://' + hostname + ':' + "49874" + '/');
 
   ws.onmessage = function (event) {
     checkedAssets = {};

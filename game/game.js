@@ -1,6 +1,6 @@
 import Hopper from "./classes/Hopper.js";
 import Selector from "./classes/Selector.js";
-import Painter from "./classes/Painter.js";
+import Dragger from "./classes/Dragger.js";
 import {debugPanel} from "./eventListeners";
 
 export const config = {
@@ -64,7 +64,7 @@ export const gameBoard = [
 
 export let hoppers = [];
 export const selector = new Selector();
-export const painter = new Painter();
+export const dragger = new Dragger();
 function init() {
 	debugPanel.innerHTML = "Playing level"
 	hoppers = [];
@@ -124,7 +124,7 @@ function gameLoop() {
 	}
 	// Update and draw selector
 	if (config.mode == "editor") {
-		painter.update();
+		dragger.update();
 	} else {
 		selector.update();
 	}
